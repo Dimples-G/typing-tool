@@ -1,0 +1,2271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>打字通</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      :root {
+        --main-color: #3b82f6;
+        --glow: rgba(59, 130, 246, 0.5);
+      }
+
+      body {
+        background: #0f172a;
+        color: #ffffff;
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+        min-height: 100vh;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.8s ease;
+        margin: 0;
+        padding: 0 0.5rem 0.5rem 0.5rem;
+        box-sizing: border-box;
+        background-size: cover;
+        background-position: center;
+      }
+
+      #app-scaler {
+        transform-origin: top center;
+        width: min(1200px, 100%);
+        max-width: 1200px;
+        max-height: 120vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-box {
+        background: rgba(255, 255, 255, 0.04);
+        backdrop-filter: blur(25px);
+        border: 0px solid rgba(255, 255, 255, 0.1);
+        border-radius: 2rem;
+        box-shadow: 0 18px 36px -12px rgba(0, 0, 0, 0.45);
+      }
+
+      .prompt-box {
+        background: rgba(255, 255, 255, 0.01);
+        backdrop-filter: blur(22px);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        min-height: 200px;
+        position: relative;
+        padding: 1.5rem !important;
+      }
+
+      .lines-viewport {
+        height: 150px;
+        overflow: hidden;
+        position: relative;
+        margin-top: 16px;
+      }
+
+      .lines-container {
+        transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .line-item {
+        height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      /*虚拟键盘的 “普通按键基础样式”*/
+      .key-base {
+        background: rgba(255, 255, 255, 0.04);
+        color: #ffffff;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0.8rem;
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.42);
+        transition: all 0.12s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        padding: 0.4rem 0.6rem;
+        backdrop-filter: blur(6px);
+        position: relative;
+      }
+
+      .key-func {
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.06),
+          rgba(255, 255, 255, 0.03)
+        );
+        color: white;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        box-shadow: 0 5px 12px rgba(0, 0, 0, 0.35);
+      }
+
+      .key-active {
+        transform: translateY(6px);
+        box-shadow: 0 0 30px var(--glow) !important;
+        filter: brightness(1.15);
+      }
+
+      .char-now {
+        border-bottom: 5px solid var(--main-color);
+        animation: blink 1s infinite;
+        position: relative;
+      }
+
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      .text-passed {
+        color: var(--main-color);
+        opacity: 0.9;
+      }
+
+      .text-error {
+        color: #f87171;
+        background: rgba(248, 113, 113, 0.2);
+        border-radius: 6px;
+      }
+
+      .text-waiting {
+        opacity: 0.2;
+      }
+      /*按钮的基础样式（默认状态）*/
+      .btn {
+        padding: 0.45rem 0.75rem;
+        border-radius: 0.7rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.03));
+        box-shadow: 0 5px 14px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(6px);
+        transition: transform 0.14s ease, box-shadow 0.14s ease,
+          background 0.14s ease;
+      }
+
+      .btn:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+      }
+
+      .btn-accent {
+        background: linear-gradient(
+          90deg,
+          var(--main-color),
+          rgba(255, 255, 255, 0.03)
+        );
+        border-color: rgba(255, 255, 255, 0.12);
+      }
+
+      .btn-ghost {
+        background: rgba(255, 255, 255, 0.02);
+        border-color: rgba(255, 255, 255, 0.06);
+      }
+
+      .btn-small {
+        padding: 0.28rem 0.5rem;
+        font-size: 12px;
+        border-radius: 0.6rem;
+        gap: 0.4rem;
+      }
+
+      /* 头部布局：紧凑且可换行，避免任何宽度下溢出 */
+      .app-header {
+        align-items: flex-start;
+        min-height: 80px;
+        padding: 1rem !important;
+      }
+
+      .app-header .brand {
+        flex: 0 0 auto;
+      }
+
+      .app-header .control-row {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
+      .app-header .control-block {
+        flex: 1 1 220px;
+        min-width: 160px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem;
+      }
+
+      .app-header .btn,
+      .app-header .btn-small {
+        padding: 0.3rem 0.55rem;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .app-header .control-block input[type="range"] {
+        flex: 0 0 90px;
+      }
+
+      footer {
+        padding: 1.2rem !important;
+      }
+      /*整个统计面板的容器*/
+      .stat-panel {
+        background: linear-gradient(
+          135deg,
+          rgba(255, 255, 255, 0.02),
+          rgba(0, 0, 0, 0.12)
+        );
+        padding: 0.1rem;
+        border-radius: 0.9rem;
+        display: flex;
+        gap: 0.3rem;
+        align-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.32);
+      }
+
+      .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.6rem;
+        background: rgba(249, 247, 247, 0.01);
+        border: 1px solid rgba(255, 255, 255, 0.03);
+        font-weight: 800;
+        color: #fff;
+      }
+
+      .stat-value {
+        color: var(--main-color);
+        font-weight: 900;
+        margin-left: 4px;
+      }
+
+      /* 指法颜色标注 */
+      .key-base::before {
+        content: "";
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        right: 6px;
+        height: 6px;
+        border-radius: 6px;
+        opacity: 0;
+        transition: opacity 0.12s ease, box-shadow 0.12s ease;
+      }
+
+      .finger-left-pinky::before {
+        background: #ef4444;
+        opacity: 1;
+        box-shadow: 0 6px 18px rgba(239, 68, 68, 0.12);
+      }
+
+      .finger-left-ring::before {
+        background: #fb923c;
+        opacity: 1;
+        box-shadow: 0 6px 18px rgba(251, 146, 60, 0.12);
+      }
+
+      .finger-left-middle::before {
+        background: #f59e0b;
+        opacity: 1;
+        box-shadow: 0 6px 18px rgba(245, 158, 11, 0.12);
+      }
+
+      .finger-left-index::before {
+        background: #10b981;
+        opacity: 1;
+        box-shadow: 0 6px 18px rgba(16, 185, 129, 0.12);
+      }
+
+      .finger-right-index::before {
+        background: #06b6d4;
+        opacity: 1;
+        box-shadow: 0 6px 18px rgba(6, 182, 212, 0.12);
+      }
+
+      .finger-right-middle::before {
+        background: #3b82f6;
+        opacity: 1;
+        box-shadow: 0 6px 18px rgba(59, 130, 246, 0.12);
+      }
+
+      .finger-right-ring::before {
+        background: #8b5cf6;
+        opacity: 1;
+        box-shadow: 0 6px 18px rgba(139, 92, 246, 0.12);
+      }
+
+      .finger-right-pinky::before {
+        background: #f472b6;
+        opacity: 1;
+        box-shadow: 0 6px 18px rgba(244, 114, 182, 0.12);
+      }
+
+      .finger-thumb::before {
+        background: #9ca3af;
+        opacity: 1;
+        box-shadow: 0 6px 18px rgba(156, 163, 175, 0.06);
+      }
+
+      .finger-legend {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 10px;
+        border-radius: 0.6rem;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.03);
+        color: #fff;
+        font-size: 13px;
+        margin: 0 0 8px 0;
+      }
+
+      .finger-swatch {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .swatch-box {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(0, 0, 0, 0.18);
+      }
+
+      .char-wrapper {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        min-width: 16px;
+        margin: 0 2px;
+        letter-spacing: 0 !important;
+        word-spacing: 0 !important;
+        text-align: center;
+      }
+
+      .pinyin-above {
+        display: none;
+      }
+
+      .char-main {
+        line-height: 1.2;
+        letter-spacing: 0 !important;
+        text-align: center;
+      }
+
+      .library-card {
+        min-height: 80px;
+        padding: 0.5rem !important;
+      }
+
+      .text-4xl,
+      .md\:text-5xl {
+        letter-spacing: 0.08em !important; /* 增加字符间距 */
+        word-spacing: 0.2em !important; /* 增加词间距 */
+        line-height: 1.8 !important;
+        font-size: 2.2rem !important; /* 减小字体大小 */
+        max-width: 90%;
+        margin: 0 auto;
+        display: inline-block;
+        text-align: center;
+        padding: 0 20px;
+        box-sizing: border-box;
+      }
+      /* 修改后：减小英文单词内字母间距，优化字符容器宽度 */
+      .en-mode .text-4xl,
+      .en-mode .md\:text-5xl {
+        font-size: 1.8rem !important;
+        /* 关键修改：字母间距设为负值（收紧），根据视觉效果微调，推荐-0.02~0em */
+        letter-spacing: -0.02em !important;
+        /* 单词间距保留轻微间距，避免单词粘连，可按需调小 */
+        word-spacing: 0.02em !important;
+      }
+
+      .en-mode .text-4xl > span,
+      .en-mode .md\:text-4xl > span {
+        /* 关键修改：缩小字符容器最小宽度，避免字母被“撑开” */
+        min-width: 0.2em !important;
+        /* 可选：增加行内对齐，避免字符错位导致的视觉间距 */
+        display: inline-block;
+        vertical-align: middle;
+      }
+      /* 每行文字的容器 */
+      .text-4xl > span,
+      .md\:text-5xl > span {
+        display: inline-block;
+        min-width: 0.5em; /* 确保每个字符有最小宽度 */
+        position: relative;
+        text-align: center;
+      }
+      /* 增加行高 */
+      .line-item {
+        height: 120px; /* 从100px增加到120px */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /*提示词框*/
+      .lines-viewport {
+        height: 150px; /* 从180px增加到220px */
+        overflow: hidden;
+        position: relative;
+        margin-top: 30px;
+      }
+
+      /* 响应式调整，确保小屏也能舒适使用 */
+      @media (max-width: 1024px) {
+        body {
+          align-items: flex-start;
+          padding: 0.5rem;
+        }
+
+        #app-scaler {
+          gap: 0.5rem;
+        }
+
+        .lines-viewport {
+          height: 150px;
+        }
+
+        .line-item {
+          height: 120px;
+        }
+      }
+
+      @media (max-width: 768px) {
+        #app-scaler {
+          width: 100%;
+        }
+
+        .text-4xl,
+        .md\:text-5xl {
+          font-size: 1.4rem !important;
+          line-height: 1.6 !important;
+        }
+
+        footer .key-base {
+          padding: 0.3rem 0.5rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" v-cloak>
+      <div id="app-scaler" :style="{ transform: `scale(${scaleRatio})` }">
+        <!-- 头部 -->
+        <header
+          class="glass-box p-4 flex flex-wrap justify-between items-center gap-2 app-header"
+        >
+          <div
+            class="flex items-center gap-3 brand"
+            :class="{ 'w-full justify-center mb-2': isMobile }"
+          >
+            <div
+              class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-inner"
+              :style="{background: currentTheme.main}"
+            >
+              ⌨️
+            </div>
+            <div>
+              <h1 class="text-2xl font-black tracking-tighter uppercase">
+                打字通
+              </h1>
+            </div>
+          </div>
+          <div
+            class="flex items-center gap-2 md:gap-3 flex-wrap justify-end control-row"
+          >
+            <!-- 语言切换 -->
+            <div
+              class="bg-black/20 p-1 flex md:5 gap-1 rounded-full font-bold text-[10px]"
+            >
+              <button
+                @click="setLang('zh')"
+                :class="lang === 'zh' ? 'bg-white text-black' : 'opacity-40'"
+                class="px-4 py-2 rounded-full transition-all shadow-xl"
+              >
+                ZH
+              </button>
+              <button
+                @click="setLang('en')"
+                :class="lang === 'en' ? 'bg-white text-black' : 'opacity-40'"
+                class="px-4 py-2 rounded-full transition-all shadow-xl"
+              >
+                EN
+              </button>
+            </div>
+
+            <!-- 主题颜色 -->
+            <div class="flex gap-2 flex-wrap" :class="{ 'mb-2': isMobile }">
+              <div
+                v-for="(t, name) in themes"
+                :key="name"
+                @click="changeTheme(name)"
+                :style="{ background: t.main }"
+                class="w-6 h-6 rounded-full cursor-pointer border-2 border-white/20 transition-transform hover:scale-125 shadow-md"
+                :class="currentThemeName === name ? 'ring-4 ring-white/30 scale-110' : 'opacity-50'"
+              ></div>
+            </div>
+
+            <!-- 背景控制 -->
+            <div class="flex items-center gap-1.5 control-block ml-6">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <div class="control-label text-xs opacity-80">
+                  <span>背景 </span>
+                </div>
+                <div class="flex gap-3 flex-wrap">
+                  <div
+                    v-for="(bg, name) in backgrounds"
+                    :key="name"
+                    @click="changeBackground(name)"
+                    class="w-6 h-6 rounded-full cursor-pointer border-2 border-white/20 transition-transform hover:scale-125 shadow-md"
+                    :class="currentBackgroundName === name ? 'ring-4 ring-white/30 scale-110' : 'opacity-60'"
+                    :title="bg.name"
+                    :style="{ 
+                            backgroundImage: name !== 'default' ? `url(${bg.url})` : 'none',
+                            backgroundSize: 'cover', 
+                            backgroundPosition: 'center',
+                            backgroundColor: name === 'default' ? '#2c343f' : 'transparent'
+                            }"
+                  ></div>
+                </div>
+                <input
+                  id="keyboardWallpaperInput"
+                  type="file"
+                  accept="image/*"
+                  style="display: none"
+                  @change="onKeyboardWallpaper"
+                />
+                <button
+                  @click="triggerKeyboardUpload"
+                  class="btn btn-ghost btn-small mt-2"
+                  title="上传背景"
+                >
+                  <span>自定义背景</span>
+                </button>
+                <button
+                  v-if="showBgCancel"
+                  @click="cancelBackground"
+                  class="btn btn-ghost btn-small ml-2 mt-2"
+                  title="取消背景"
+                >
+                  <span>取消背景</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 音效与账号 -->
+            <div class="flex items-center gap-1.5 flex-wrap justify-end">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button
+                  class="btn btn-ghost btn-small"
+                  @click="toggleSound"
+                  title="键盘敲击音效"
+                >
+                  <span>{{ soundEnabled ? '键音开' : '键音关' }}</span>
+                </button>
+                <button
+                  class="btn btn-ghost btn-small"
+                  @click="toggleBgm"
+                  title="背景音乐开关"
+                >
+                  <span>{{ bgmPlaying ? '暂停BGM' : '播放BGM' }}</span>
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  :value="bgmVolume"
+                  @input="setBgmVolume($event.target.valueAsNumber)"
+                  class="w-16 max-w-[90px] h-1.5 accent-blue-400 bg-white/10 rounded-full"
+                  title="背景音乐音量"
+                />
+                <button
+                  class="btn btn-ghost btn-small"
+                  @click="triggerBgmUpload"
+                  title="上传背景音乐"
+                >
+                  <span>上传BGM</span>
+                </button>
+
+                <button
+                  class="btn btn-ghost btn-small"
+                  @click="resetToDefaultBGM"
+                  title="切换回默认背景音乐"
+                  v-if="bgmObjectUrl"
+                  <!--
+                  只在有自定义BGM时显示
+                  --
+                >
+                  >
+                  <span>默认BGM</span>
+                </button>
+
+                <input
+                  id="bgmInput"
+                  type="file"
+                  accept="audio/*"
+                  style="display: none"
+                  @change="onBgmUpload"
+                />
+              </div>
+
+              <div class="flex items-center gap-1.5">
+                <span v-if="currentUser" class="text-xs opacity-70"
+                  >Hi, {{ currentUser }}</span
+                >
+                <button
+                  class="btn btn-accent btn-small"
+                  @click="currentUser ? logout() : openAuth('login')"
+                  title="登录 / 注册"
+                >
+                  <span>{{ currentUser ? '退出登录' : '登录 / 注册' }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- 文本选择 -->
+        <section class="grid gap-3" :class="textGridClass">
+          <!-- 词库选项 -->
+          <div
+            v-for="(sentences, title, idx) in library[lang]"
+            @click="selectPoetry(title)"
+            :style="{ borderLeft: '5px solid ' + ['#f472b6','#3b82f6','#10b981','#fbbf24'][idx%4] }"
+            class="glass-box library-card cursor-pointer hover:bg-white/5 transition-all active:scale-95 group"
+          >
+            <h3 class="font-bold text-sm truncate group-hover:text-blue-400">
+              {{ title }}
+            </h3>
+            <div class="mt-2 flex justify-between items-center">
+              <span class="text-[9px] opacity-20 font-bold uppercase"
+                >Ready</span
+              >
+              <span
+                v-if="currentTitle === title"
+                class="w-2 h-2 rounded-full animate-pulse"
+                :style="{background: currentTheme.main}"
+              ></span>
+            </div>
+          </div>
+
+          <!-- 自定义文本选项 -->
+          <div
+            @click="selectCustomText()"
+            :style="{ borderLeft: '5px solid #8b5cf6' }"
+            class="glass-box library-card cursor-pointer hover:bg-white/5 transition-all active:scale-95 group"
+          >
+            <h3 class="font-bold text-sm truncate group-hover:text-purple-400">
+              {{ getCustomTextTitle() }}
+            </h3>
+            <div class="mt-2 flex justify-between items-center">
+              <span class="text-[9px] opacity-20 font-bold uppercase">
+                {{ lang === 'en' ? 'Custom' : '自定义' }}
+              </span>
+              <span
+                v-if="currentTitle === '__CUSTOM__'"
+                class="w-2 h-2 rounded-full animate-pulse"
+                :style="{background: currentTheme.main}"
+              ></span>
+            </div>
+            <div class="mt-2 flex justify-end">
+              <button
+                class="text-[10px] px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition"
+                @click.stop="toggleCustomEditor(true)"
+              >
+                {{ lang === 'en' ? 'Edit text' : '编辑文本' }}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 主输入区域 -->
+        <main
+          class="glass-box prompt-box p-8 relative flex flex-col justify-center overflow-hidden"
+        >
+          <!-- 顶部提示 -->
+          <div
+            class="absolute top-8 left-10 flex items-center gap-3 opacity-30 italic text-xs"
+          >
+            <div
+              class="w-1.5 h-4"
+              :style="{background: currentTheme.main}"
+            ></div>
+            <span v-if="currentTitle === '__CUSTOM__'"
+              >自定义文本 / {{ lang.toUpperCase() }} MODE</span
+            >
+            <span v-else>"Typer Master / {{ lang.toUpperCase() }} MODE"</span>
+          </div>
+
+          <!-- 计时面板 -->
+          <div class="absolute top-4 right-10 flex items-center gap-3 z-10">
+            <div class="stat-panel flex-wrap gap-2">
+              <div class="stat-pill">
+                <span class="label">计时</span>
+                <strong class="stat-value">{{ timeText }}</strong>
+              </div>
+              <div class="stat-pill">
+                <span class="label">{{ lang === 'en' ? 'WPM' : '速率' }}</span>
+                <strong class="stat-value"
+                  >{{ lang === 'en' ? wpm : cps }} {{ lang === 'en' ? 'WPM' :
+                  '字/秒' }}</strong
+                >
+              </div>
+              <div class="stat-pill">
+                <span class="label">{{ lang === 'en' ? 'CPM' : '字/分' }}</span>
+                <strong class="stat-value"
+                  >{{ lang === 'en' ? cpm + ' CPM' : cpm + ' 字/分' }}</strong
+                >
+              </div>
+              <button
+                class="ml-2 btn btn-ghost btn-small"
+                @click="togglePause"
+                title="暂停 / 继续"
+              >
+                <span>{{ paused ? '继续' : '暂停' }}</span>
+              </button>
+              <button
+                class="ml-2 btn btn-ghost btn-small"
+                @click="endSession"
+                title="结束并记录本次成绩"
+              >
+                <span>结束</span>
+              </button>
+              <button
+                class="ml-2 btn btn-accent btn-small"
+                @click="toggleHistory"
+                title="查看历史成绩"
+              >
+                <span>{{ showHistory ? '隐藏成绩' : '查看成绩' }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 文本显示 -->
+          <div class="lines-viewport">
+            <div
+              class="lines-container"
+              :style="{ transform: `translateY(-${currentLineIndex * lineHeightPx}px)` }"
+            >
+              <div
+                v-for="(line, index) in poetryLines"
+                :key="index"
+                class="line-item"
+              >
+                <div
+                  class="text-4xl md:text-5xl font-light tracking-widest text-center transition-all duration-500"
+                  :class="{ 'en-mode': lang === 'en' }"
+                  :style="{ 
+                                    opacity: index === currentLineIndex ? 1 : 0.1, 
+                                    transform: index === currentLineIndex ? 'scale(1)' : 'scale(0.8)' 
+                                }"
+                >
+                  <span v-for="(char, i) in line" :key="i" class="char-wrapper">
+                    <span
+                      class="char-main"
+                      :class="index === currentLineIndex ? getCharClass(i) : ''"
+                    >
+                      {{ char }}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 进度条 -->
+          <div class="absolute bottom-8 right-14 flex items-center gap-4">
+            <span
+              class="text-[10px] opacity-20 font-bold uppercase tracking-widest"
+              >Progress</span
+            >
+            <div
+              class="w-40 h-1.5 bg-white/5 rounded-full overflow-hidden shadow-inner"
+            >
+              <div
+                class="h-full transition-all duration-700"
+                :style="{ width: progress + '%', background: currentTheme.main }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- 隐藏输入框 -->
+          <input
+            ref="inputRef"
+            type="text"
+            v-model="userInput"
+            @input="handleInput"
+            class="absolute inset-0 opacity-0 cursor-default"
+            style="pointer-events: none"
+            autofocus
+          />
+        </main>
+
+        <!-- 键盘区域 -->
+        <footer
+          class="bg-black/20 p-8 rounded-[2.5rem] border border-white/5 shadow-inner"
+        >
+          <div class="flex flex-col gap-3">
+            <!-- 手指图例 -->
+            <div class="finger-legend">
+              <div class="finger-swatch">
+                <div class="swatch-box" style="background: #ef4444"></div>
+                <div>左手小指</div>
+              </div>
+              <div class="finger-swatch">
+                <div class="swatch-box" style="background: #fb923c"></div>
+                <div>左手无名指</div>
+              </div>
+              <div class="finger-swatch">
+                <div class="swatch-box" style="background: #f59e0b"></div>
+                <div>左手中指</div>
+              </div>
+              <div class="finger-swatch">
+                <div class="swatch-box" style="background: #10b981"></div>
+                <div>左手食指</div>
+              </div>
+              <div class="finger-swatch">
+                <div class="swatch-box" style="background: #06b6d4"></div>
+                <div>右手食指</div>
+              </div>
+              <div class="finger-swatch">
+                <div class="swatch-box" style="background: #3b82f6"></div>
+                <div>右手中指</div>
+              </div>
+              <div class="finger-swatch">
+                <div class="swatch-box" style="background: #8b5cf6"></div>
+                <div>右手无名指</div>
+              </div>
+              <div class="finger-swatch">
+                <div class="swatch-box" style="background: #f472b6"></div>
+                <div>右手小指</div>
+              </div>
+              <div class="finger-swatch">
+                <div class="swatch-box" style="background: #9ca3af"></div>
+                <div>大拇指</div>
+              </div>
+            </div>
+
+            <!-- 键盘布局 -->
+            <div
+              v-for="(row, rIdx) in keyboardLayout"
+              :key="rIdx"
+              class="flex justify-center gap-3"
+            >
+              <div
+                v-for="key in row"
+                :key="key.code"
+                :style="{ width: key.w, height: '65px' }"
+                :class="['key-base', getFingerClass(key), { 'key-active': activeKeys.has(key.code) }, { 'key-func': key.type === 'func' }]"
+              >
+                <span v-if="key.sub" class="text-[9px] opacity-40 mb-0.5"
+                  >{{ key.sub }}</span
+                >
+                <span class="text-base uppercase">{{ key.label }}</span>
+              </div>
+            </div>
+          </div>
+        </footer>
+      </div>
+
+      <!-- 自定义文本编辑器 -->
+      <div
+        v-if="showCustomEditor"
+        class="fixed inset-0 flex items-center justify-center z-50 p-6 bg-black/50"
+      >
+        <div class="w-[760px] max-w-full p-6 bg-white rounded-2xl shadow-2xl">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-black">自定义文本（每行代表一行练习）</h3>
+            <div class="flex gap-2">
+              <button
+                @click="applyCustomText"
+                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                应用
+              </button>
+              <button
+                @click="toggleCustomEditor"
+                class="px-4 py-2 bg-gray-200 text-black rounded-lg hover:bg-gray-300"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+          <textarea
+            v-model="customText"
+            placeholder="在此粘贴或输入任意文本。文本将会像词库一样被分割成多行显示。
+
+示例1（中文）：
+君不见，黄河之水天上来，奔流到海不复回。
+君不见，高堂明镜悲白发，朝如青丝暮成雪。
+人生得意须尽欢，莫使金樽空对月。
+
+示例2（英文）：
+When you are old and grey and full of sleep,
+And nodding by the fire, take down this book,
+And slowly read, and dream of the soft look
+Your eyes had once, and of their shadows deep."
+            class="w-full h-56 p-3 bg-white text-black rounded-lg border border-gray-300 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+          </textarea>
+          <div class="mt-3 text-sm text-gray-600">
+            <p>提示：文本将自动分割成适当的行进行显示。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 历史记录 -->
+      <div
+        v-if="showHistory"
+        class="fixed inset-0 flex items-center justify-center z-50 bg-black/50"
+      >
+        <div class="w-[640px] p-6 glass-box">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold">历史成绩</h3>
+            <div>
+              <button
+                class="px-3 py-1 mr-2 rounded bg-white/10 hover:bg-white/20"
+                @click="clearHistory"
+              >
+                清空
+              </button>
+              <button
+                class="px-3 py-1 rounded bg-white/10 hover:bg-white/20"
+                @click="showHistory=false"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+          <div v-if="history.length===0" class="text-sm text-gray-400">
+            暂无记录
+          </div>
+          <ul v-else class="space-y-3 max-h-96 overflow-y-auto">
+            <li
+              v-for="(h,idx) in history"
+              :key="idx"
+              class="p-3 bg-black/10 rounded"
+            >
+              <div class="flex justify-between items-center">
+                <div>
+                  <strong
+                    >{{ h.metric !== undefined ? h.metric : h.wpm }}</strong
+                  >
+                  {{ h.metricLabel ? h.metricLabel : (h.lang === 'zh' ? '字/分'
+                  : 'WPM') }} · {{ Math.round(h.duration/1000) }}s
+                </div>
+                <div class="text-xs opacity-50">
+                  {{ new Date(h.time).toLocaleString() }}
+                </div>
+              </div>
+              <div class="text-sm opacity-60 mt-1">{{ h.text }}</div>
+              <div class="text-[11px] opacity-40 mt-1">
+                {{ h.user ? '用户: ' + h.user : '访客' }}
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 登录 / 注册 -->
+      <div
+        v-if="showAuth"
+        class="fixed inset-0 flex items-center justify-center z-50 bg-black/50"
+      >
+        <div
+          class="w-[420px] max-w-full p-6 bg-white rounded-2xl shadow-2xl text-black"
+        >
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold">
+              {{ authMode === 'login' ? '登录' : '注册' }}
+            </h3>
+            <button class="text-sm text-blue-500" @click="showAuth=false">
+              关闭
+            </button>
+          </div>
+
+          <div class="flex gap-2 mb-4">
+            <button
+              class="px-3 py-1 rounded text-sm"
+              :class="authMode === 'login' ? 'bg-blue-500 text-white' : 'bg-gray-100'"
+              @click="authMode='login'"
+            >
+              登录
+            </button>
+            <button
+              class="px-3 py-1 rounded text-sm"
+              :class="authMode === 'register' ? 'bg-blue-500 text-white' : 'bg-gray-100'"
+              @click="authMode='register'"
+            >
+              注册
+            </button>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="text-sm text-gray-700">用户名</label>
+              <input
+                v-model.trim="authForm.username"
+                class="w-full mt-1 p-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="请输入用户名"
+              />
+            </div>
+            <div>
+              <label class="text-sm text-gray-700">密码</label>
+              <input
+                v-model="authForm.password"
+                type="password"
+                class="w-full mt-1 p-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="请输入密码"
+              />
+            </div>
+            <div
+              class="flex justify-between items-center text-xs text-gray-500"
+            >
+              <span>登录后成绩会标记用户名</span>
+            </div>
+            <button
+              class="w-full py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              @click="submitAuth"
+            >
+              {{ authMode === 'login' ? '登录' : '注册' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { createApp, ref, computed, onMounted, onUnmounted, watch } = Vue;
+
+      createApp({
+        setup() {
+          // 缩放逻辑
+          const scaleRatio = ref(1);
+
+          const updateScale = () => {
+            const baseW = 1250;
+            const baseH = 950;
+            const scaleW = window.innerWidth / baseW;
+            const scaleH = window.innerHeight / baseH;
+            scaleRatio.value = Math.min(scaleW, scaleH, 1.2);
+          };
+
+          // 单行高度（用于行滚动距离，与样式保持一致）
+          const lineHeightPx = 120;
+
+          // 词库
+          const library = {
+            zh: {
+              "将进酒 · 李白": [
+                "君不见，黄河之水天上来，奔流到海不复回。",
+                "君不见，高堂明镜悲白发，朝如青丝暮成雪。",
+                "人生得意须尽欢，莫使金樽空对月。",
+                "天生我材必有用，千金散尽还复来。",
+                "烹羊宰牛且为乐，会须一饮三百杯。",
+              ],
+              "琵琶行 · 白居易": [
+                "浔阳江头夜送客，枫叶荻花秋瑟瑟。",
+                "主人下马客在船，举酒欲饮无管弦。",
+                "醉不成欢惨将别，别时茫茫江浸月。",
+                "忽闻水上琵琶声，主人忘归客不发。",
+              ],
+              "爱莲说 · 周敦颐": [
+                "予独爱莲之出淤泥而不染，濯清涟而不妖。",
+                "中通外直，不蔓不枝，香远益清。",
+                "亭亭净植，可远观而不可亵玩焉。",
+              ],
+              "水调歌头 · 苏轼": [
+                "明月几时有？把酒问青天。",
+                "不知天上宫阙，今夕是何年。",
+                "我欲乘风归去，又恐琼楼玉宇，高处不胜寒。",
+              ],
+            },
+            en: {
+              "When You Are Old": [
+                "When you are old and grey and full of sleep,",
+                "And nodding by the fire, take down this book,",
+                "And slowly read, and dream of the soft look",
+                "Your eyes had once, and of their shadows deep.",
+              ],
+              "The Road Not Taken": [
+                "Two roads diverged in a yellow wood,",
+                "And sorry I could not travel both",
+                "And be one traveler, long I stood",
+                "And looked down one as far as I could.",
+              ],
+              "If - Kipling": [
+                "If you can keep your head when all about you",
+                "Are losing theirs and blaming it on you,",
+                "If you can trust yourself when all men doubt you,",
+                "But make allowance for their doubting too;",
+              ],
+            },
+          };
+
+          // 主题
+          const themes = {
+            blue: { main: "#2B5C8F", glow: "rgba(43, 92, 143, 0.8)" },
+            pink: { main: "#B86B7F", glow: "rgba(184, 107, 127, 0.8)" },
+            green: { main: "#2E7D58", glow: "rgba(46, 125, 88, 0.8)" },
+            red: { main: "#D32F2F", glow: "rgba(211, 47, 47, 0.8)" },
+            purple: { main: "#6247AA", glow: "rgba(98, 71, 170, 0.8)" },
+            orange: { main: "#C2703D", glow: "rgba(194, 112, 61, 0.8)" },
+            gray: { main: "#3D4852", glow: "rgba(61, 72, 82, 0.8)" },
+          };
+
+          // 背景
+          const backgrounds = {
+            default: {
+              name: "默认",
+              url: "",
+              type: "gradient",
+              value:
+                "radial-gradient(circle at 50% 50%, #2c343f 0%, #1a1f26 100%)",
+            },
+            mountain: {
+              name: "山脉",
+              url: "background-mountain.png",
+              type: "image",
+            },
+            ocean: {
+              name: "海洋",
+              url: "background-ocean.png",
+              type: "image",
+            },
+            forest: {
+              name: "森林",
+              url: "background-forest.png",
+              type: "image",
+            },
+            night: {
+              name: "星空",
+              url: "background-night.png",
+              type: "image",
+            },
+            sunset: {
+              name: "日落",
+              url: "background-sunset.png",
+              type: "image",
+            },
+            aurora: {
+              name: "极光",
+              url: "background-aurora.png",
+              type: "image",
+            },
+          };
+          const keyboardsound = {
+            default: {
+              name: "默认音效",
+              url: "https://https://pixabay.com/zh/music/.mp3",
+              type: "audio",
+            },
+            // 可继续添加其他音效
+          };
+          const currentKeyboardSound = ref("default");
+          const keyboardSoundPlayers = {};
+          // 响应式状态
+          const currentThemeName = ref("blue");
+          const currentTheme = computed(() => themes[currentThemeName.value]);
+          const currentBackgroundName = ref("default");
+          const showBgCancel = ref(false);
+          const bgObjectUrl = ref(null);
+
+          const lang = ref("zh");
+          const currentTitle = ref("将进酒 · 李白");
+          const currentLineIndex = ref(0);
+          const currentCharIndex = ref(0);
+          const userInput = ref("");
+          const activeKeys = ref(new Set());
+          const inputRef = ref(null);
+
+          // 键盘音效与背景音乐
+          const soundEnabled = ref(true);
+          let audioCtx = null;
+          const bgmAudio = new Audio();
+          bgmAudio.loop = true;
+          const bgmPlaying = ref(false);
+          const bgmVolume = ref(0.4);
+          const defaultBgmUrl = "bgm.mp3";
+          const currentBgmUrl = ref(defaultBgmUrl);
+          const bgmObjectUrl = ref(null);
+
+          // 账号
+          const showAuth = ref(false);
+          const authMode = ref("login");
+          const authForm = ref({ username: "", password: "" });
+          const currentUser = ref("");
+          const usersStore = ref({});
+
+          // 自定义文本
+          const customText = ref("");
+          const customTextArray = ref([]);
+          const customLines = ref([]);
+          const showCustomEditor = ref(false);
+
+          // 是否有自定义文本
+          const hasCustomText = computed(() => {
+            return customTextArray.value && customTextArray.value.length > 0;
+          });
+
+          const textGridClass = computed(() => {
+            // 中文有4个词库项，新增自定义卡片时改为5列，英文保持4列
+            return lang.value === "zh" ? "grid-cols-5" : "grid-cols-4";
+          });
+
+          // 计算属性
+          const poetryLines = computed(() => {
+            const pool = library[lang.value] || {};
+            if (currentTitle.value === "__CUSTOM__") {
+              // 自定义文本：返回分割后的文本数组
+              return customTextArray.value;
+            }
+            // 词库文本
+            return pool[currentTitle.value] || [];
+          });
+
+          const currentLineText = computed(() => {
+            if (
+              poetryLines.value &&
+              poetryLines.value.length > 0 &&
+              currentLineIndex.value < poetryLines.value.length
+            ) {
+              return poetryLines.value[currentLineIndex.value];
+            }
+            return "";
+          });
+
+          const progress = computed(() => {
+            if (poetryLines.value.length === 0) return 0;
+            return (currentLineIndex.value / poetryLines.value.length) * 100;
+          });
+
+          // 方法
+          const changeTheme = (name) => {
+            currentThemeName.value = name;
+            document.documentElement.style.setProperty(
+              "--main-color",
+              themes[name].main
+            );
+            document.documentElement.style.setProperty(
+              "--glow",
+              themes[name].glow
+            );
+          };
+
+          const changeBackground = (name) => {
+            const bg = backgrounds[name];
+            if (!bg) return;
+
+            // 清理之前的blob URL
+            if (
+              bgObjectUrl.value &&
+              currentBackgroundName.value !== "default"
+            ) {
+              try {
+                URL.revokeObjectURL(bgObjectUrl.value);
+              } catch (e) {
+                console.warn("释放blob URL失败:", e);
+              }
+              bgObjectUrl.value = null;
+            }
+
+            currentBackgroundName.value = name;
+
+            // 清除所有背景样式
+            document.body.style.background = "";
+            document.body.style.backgroundImage = "";
+            document.body.style.backgroundSize = "";
+            document.body.style.backgroundPosition = "";
+
+            if (bg.type === "gradient") {
+              // 设置渐变背景
+              document.body.style.background = bg.value;
+            } else if (bg.type === "image") {
+              // 设置图片背景
+              document.body.style.backgroundImage = `url(${bg.url})`;
+              document.body.style.backgroundSize = "cover";
+              document.body.style.backgroundPosition = "center";
+              document.body.style.backgroundAttachment = "fixed";
+            }
+
+            showBgCancel.value = name !== "default";
+          };
+
+          const toggleSound = () => {
+            soundEnabled.value = !soundEnabled.value;
+          };
+
+          const initKeyboardSounds = () => {
+            Object.entries(keyboardsound).forEach(([key, cfg]) => {
+              if (cfg.type === "audio" && cfg.url) {
+                const audio = new Audio(cfg.url);
+                audio.preload = "auto";
+                keyboardSoundPlayers[key] = audio;
+              }
+            });
+          };
+
+          const playOscFallback = () => {
+            try {
+              if (!audioCtx) {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                audioCtx = Ctx ? new Ctx() : null;
+              }
+              if (!audioCtx) return;
+              const osc = audioCtx.createOscillator();
+              const gain = audioCtx.createGain();
+              osc.type = "triangle";
+              osc.frequency.value = 520;
+              gain.gain.setValueAtTime(0.07, audioCtx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(
+                0.0001,
+                audioCtx.currentTime + 0.06
+              );
+              osc.connect(gain).connect(audioCtx.destination);
+              osc.start();
+              osc.stop(audioCtx.currentTime + 0.06);
+            } catch (e) {
+              console.warn(e);
+            }
+          };
+
+          const playKeySound = () => {
+            if (!soundEnabled.value) return;
+            const player = keyboardSoundPlayers[currentKeyboardSound.value];
+            if (player) {
+              try {
+                player.currentTime = 0;
+                player.volume = 0.6;
+                player.play().catch(() => playOscFallback());
+                return;
+              } catch (e) {
+                console.warn(e);
+              }
+            }
+            playOscFallback();
+          };
+
+          const setBgmSourceIfNeeded = () => {
+            if (bgmObjectUrl.value) {
+              bgmAudio.src = bgmObjectUrl.value;
+            } else if (!bgmAudio.src || bgmAudio.src.endsWith(defaultBgmUrl)) {
+              bgmAudio.src = currentBgmUrl.value;
+            }
+          };
+
+          const toggleBgm = () => {
+            setBgmSourceIfNeeded();
+            if (bgmPlaying.value) {
+              bgmAudio.pause();
+              bgmPlaying.value = false;
+            } else {
+              bgmAudio.volume = bgmVolume.value;
+              bgmAudio
+                .play()
+                .then(() => (bgmPlaying.value = true))
+                .catch((e) => {
+                  console.warn("BGM播放失败:", e);
+                  if (e.name === "NotAllowedError") {
+                    alert("请点击页面任意位置后重试播放BGM");
+                  }
+                });
+            }
+          };
+
+          const setBgmVolume = (v) => {
+            const vol = Math.max(0, Math.min(1, Number(v) || 0));
+            bgmVolume.value = vol;
+            bgmAudio.volume = vol;
+          };
+
+          const triggerBgmUpload = () => {
+            const el = document.getElementById("bgmInput");
+            if (el) el.click();
+          };
+
+          const onBgmUpload = (e) => {
+            const f = e.target.files[0];
+            if (!f) return;
+
+            if (!f.type.startsWith("audio/")) {
+              alert("请上传音频文件");
+              e.target.value = "";
+              return;
+            }
+
+            if (bgmObjectUrl.value) {
+              try {
+                URL.revokeObjectURL(bgmObjectUrl.value);
+              } catch (err) {
+                console.warn("释放BGM URL失败:", err);
+              }
+            }
+
+            const url = URL.createObjectURL(f);
+            bgmObjectUrl.value = url;
+            bgmAudio.src = url;
+            bgmAudio.volume = bgmVolume.value;
+
+            if (bgmPlaying.value) {
+              bgmAudio
+                .play()
+                .then(() => (bgmPlaying.value = true))
+                .catch((err) => {
+                  console.warn("新BGM播放失败:", err);
+                  bgmPlaying.value = false;
+                });
+            } else {
+              bgmAudio.load();
+            }
+
+            alert(`已加载自定义BGM: ${f.name}`);
+            e.target.value = "";
+          };
+
+          // 重置为默认BGM
+          const resetToDefaultBGM = () => {
+            if (bgmPlaying.value) {
+              bgmAudio.pause();
+              bgmPlaying.value = false;
+            }
+
+            if (bgmObjectUrl.value) {
+              try {
+                URL.revokeObjectURL(bgmObjectUrl.value);
+              } catch (err) {
+                console.warn(err);
+              }
+              bgmObjectUrl.value = null;
+            }
+
+            bgmAudio.src = defaultBgmUrl;
+            bgmAudio
+              .load()
+              .then(() => {
+                alert("已切换回默认背景音乐");
+              })
+              .catch((e) => {
+                console.warn("默认BGM加载失败:", e);
+                alert("默认BGM加载失败，请确保bgm.mp3文件存在");
+              });
+          };
+
+          const cancelBackground = () => {
+            changeBackground("default");
+          };
+
+          const setLang = (target) => {
+            lang.value = target;
+            // 切换到非自定义文本
+            const availableTitles = Object.keys(library[target]);
+            if (availableTitles.length > 0) {
+              currentTitle.value = availableTitles[0];
+            }
+            resetGame();
+          };
+
+          const selectPoetry = (t) => {
+            currentTitle.value = t;
+            resetGame();
+          };
+
+          // 选择自定义文本
+          const selectCustomText = () => {
+            if (customTextArray.value.length > 0) {
+              currentTitle.value = "__CUSTOM__";
+              resetGame();
+            } else {
+              toggleCustomEditor();
+            }
+          };
+
+          // 获取自定义文本标题
+          const getCustomTextTitle = () => {
+            const isEn = lang.value === "en";
+            if (customTextArray.value.length === 0)
+              return isEn ? "Custom Text (Empty)" : "自定义文本 (空)";
+
+            const firstLine = customTextArray.value[0];
+            const title =
+              firstLine.length > 15
+                ? firstLine.substring(0, 15) + "..."
+                : firstLine;
+            return isEn ? `Custom: ${title}` : `自定义: ${title}`;
+          };
+
+          const loadUsers = () => {
+            try {
+              const raw = localStorage.getItem("typer_users");
+              usersStore.value = raw ? JSON.parse(raw) : {};
+            } catch (e) {
+              usersStore.value = {};
+              console.warn(e);
+            }
+            try {
+              const saved = localStorage.getItem("typer_current_user");
+              if (saved) currentUser.value = saved;
+            } catch (e) {
+              console.warn(e);
+            }
+          };
+
+          const saveUsers = () => {
+            try {
+              localStorage.setItem(
+                "typer_users",
+                JSON.stringify(usersStore.value || {})
+              );
+            } catch (e) {
+              console.warn(e);
+            }
+          };
+
+          const openAuth = (mode = "login") => {
+            authMode.value = mode;
+            authForm.value = { username: "", password: "" };
+            showAuth.value = true;
+          };
+
+          const submitAuth = () => {
+            const username = (authForm.value.username || "").trim();
+            const password = authForm.value.password || "";
+            if (!username || !password) {
+              alert("请输入用户名和密码");
+              return;
+            }
+
+            if (authMode.value === "register") {
+              if (usersStore.value[username]) {
+                alert("用户已存在，请直接登录");
+                return;
+              }
+              usersStore.value[username] = password;
+              saveUsers();
+              alert("注册成功，请登录");
+              authMode.value = "login";
+              return;
+            }
+
+            if (usersStore.value[username] === password) {
+              currentUser.value = username;
+              localStorage.setItem("typer_current_user", username);
+              showAuth.value = false;
+              return;
+            }
+
+            alert("用户名或密码错误");
+          };
+
+          const logout = () => {
+            currentUser.value = "";
+            localStorage.removeItem("typer_current_user");
+            history.value = [];
+          };
+
+          const resetGame = () => {
+            currentLineIndex.value = 0;
+            currentCharIndex.value = 0;
+            userInput.value = "";
+            completedChars.value = 0;
+            if (inputRef.value) inputRef.value.focus();
+          };
+
+          // 将文本分割成适当长度的行
+          const splitTextIntoLines = (text, maxCharsPerLine = 35) => {
+            // 从40改为35
+            if (!text) return [];
+
+            const lines = [];
+            const sentences = text
+              .split(/[\n。！？.!?]/)
+              .filter((s) => s.trim());
+
+            for (let sentence of sentences) {
+              let trimmedSentence = sentence.trim();
+              if (!trimmedSentence) continue;
+
+              // 如果是中文，按标点分割
+              if (lang.value === "zh") {
+                if (trimmedSentence.length > maxCharsPerLine) {
+                  const parts = trimmedSentence.split(/[，,;；]/);
+                  let currentLine = "";
+
+                  for (let part of parts) {
+                    part = part.trim();
+                    if (!part) continue;
+
+                    if (
+                      currentLine.length + part.length + 1 <=
+                      maxCharsPerLine
+                    ) {
+                      currentLine = currentLine
+                        ? currentLine + "，" + part
+                        : part;
+                    } else {
+                      if (currentLine) lines.push(currentLine);
+                      currentLine = part;
+                    }
+                  }
+
+                  if (currentLine) lines.push(currentLine);
+                } else {
+                  lines.push(trimmedSentence);
+                }
+              } else {
+                // 英文处理逻辑
+                if (trimmedSentence.length > maxCharsPerLine) {
+                  const words = trimmedSentence.split(" ");
+                  let currentLine = "";
+
+                  for (let word of words) {
+                    if (
+                      currentLine.length + word.length + 1 <=
+                      maxCharsPerLine
+                    ) {
+                      currentLine = currentLine
+                        ? currentLine + " " + word
+                        : word;
+                    } else {
+                      if (currentLine) lines.push(currentLine);
+                      currentLine = word;
+                    }
+                  }
+
+                  if (currentLine) lines.push(currentLine);
+                } else {
+                  lines.push(trimmedSentence);
+                }
+              }
+            }
+
+            return lines.filter((line) => line.trim().length > 0);
+          };
+
+          // 支持一次性输入多个字符（中英文通用）
+          const applyTypedText = (text) => {
+            if (!text) return;
+            if (!timerStart.value) startTimer();
+
+            for (const ch of text) {
+              const line = currentLineText.value;
+              if (!line) break;
+              const expectedChar = line[currentCharIndex.value];
+              if (expectedChar === undefined) break;
+
+              if (ch === expectedChar) {
+                currentCharIndex.value++;
+                completedChars.value++;
+
+                if (currentCharIndex.value >= line.length) {
+                  if (currentLineIndex.value < poetryLines.value.length - 1) {
+                    currentLineIndex.value++;
+                    currentCharIndex.value = 0;
+                  } else {
+                    finishTypingSession();
+                    return;
+                  }
+                }
+              } else {
+                break;
+              }
+            }
+          };
+
+          // 拼音输入事件
+          const handleCompositionStart = (e) => {
+            // 关闭拼音处理：不再使用
+          };
+
+          const handleCompositionUpdate = (e) => {
+            // 关闭拼音处理：不再使用
+          };
+
+          const handleCompositionEnd = (e) => {
+            // 关闭拼音处理：不再使用
+          };
+
+          const handleInput = (e) => {
+            if (lang.value === "zh") {
+              if (!timerStart.value) startTimer();
+              if (e.data) {
+                applyTypedText(e.data);
+              }
+              userInput.value = "";
+            } else {
+              if (userInput.value.length && !timerStart.value) startTimer();
+
+              if (userInput.value === currentLineText.value) {
+                if (currentLineIndex.value < poetryLines.value.length - 1) {
+                  completedChars.value += currentLineText.value.length;
+                  currentLineIndex.value++;
+                  userInput.value = "";
+                  currentCharIndex.value = 0;
+                } else {
+                  userInput.value = "";
+                  currentCharIndex.value = 0;
+                  finishTypingSession();
+                  return;
+                }
+              }
+            }
+          };
+
+          const toggleCustomEditor = (open) => {
+            // open === true 强制打开，open === false 强制关闭，其他情况切换
+            if (open === true) {
+              showCustomEditor.value = true;
+            } else if (open === false) {
+              showCustomEditor.value = false;
+            } else {
+              showCustomEditor.value = !showCustomEditor.value;
+            }
+
+            // 如果正在打开编辑器，将当前的自定义文本加载到编辑框
+            if (showCustomEditor.value && customTextArray.value.length > 0) {
+              customText.value = customTextArray.value.join("\n");
+            }
+          };
+
+          // 应用自定义文本
+          const applyCustomText = () => {
+            if (!customText.value.trim()) {
+              alert("请输入文本！");
+              return;
+            }
+
+            // 将文本分割成适当长度的行
+            const lines = splitTextIntoLines(customText.value);
+
+            console.log("分割结果:", lines);
+            lines.forEach((line, i) => {
+              console.log(`第${i + 1}行: "${line}" (${line.length}字符)`);
+            });
+
+            if (lines.length === 0) {
+              alert("无法从文本中提取有效的行！");
+              return;
+            }
+
+            // 保存分割后的文本数组
+            customTextArray.value = lines;
+
+            // 自动切换到自定义文本
+            currentTitle.value = "__CUSTOM__";
+            currentLineIndex.value = 0;
+            currentCharIndex.value = 0;
+            userInput.value = "";
+            completedChars.value = 0;
+            showCustomEditor.value = false;
+
+            if (inputRef.value) inputRef.value.focus();
+
+            console.log("应用自定义文本，分割成", lines.length, "行");
+          };
+
+          const getCharClass = (i) => {
+            if (lang.value === "zh") {
+              if (i === currentCharIndex.value) return "char-now";
+              if (i > currentCharIndex.value) return "text-waiting";
+              return "text-passed";
+            } else {
+              if (i === userInput.value.length) return "char-now";
+              if (i > userInput.value.length) return "text-waiting";
+              return userInput.value[i] === currentLineText.value[i]
+                ? "text-passed"
+                : "text-error";
+            }
+          };
+
+          // 键盘布局
+          const keyboardLayout = [
+            [
+              { label: "`", sub: "~", code: "Backquote", w: "5%" },
+              { label: "1", sub: "!", code: "Digit1", w: "6%" },
+              { label: "2", sub: "@", code: "Digit2", w: "6%" },
+              { label: "3", sub: "#", code: "Digit3", w: "6%" },
+              { label: "4", sub: "$", code: "Digit4", w: "6%" },
+              { label: "5", sub: "%", code: "Digit5", w: "6%" },
+              { label: "6", sub: "^", code: "Digit6", w: "6%" },
+              { label: "7", sub: "&", code: "Digit7", w: "6%" },
+              { label: "8", sub: "*", code: "Digit8", w: "6%" },
+              { label: "9", sub: "(", code: "Digit9", w: "6%" },
+              { label: "0", sub: ")", code: "Digit0", w: "6%" },
+              { label: "-", sub: "_", code: "Minus", w: "5%" },
+              { label: "=", sub: "+", code: "Equal", w: "5%" },
+              { label: "DEL", code: "Backspace", w: "8%", type: "func" },
+            ],
+            [
+              { label: "TAB", code: "Tab", w: "7%", type: "func" },
+              { label: "Q", code: "KeyQ", w: "6%" },
+              { label: "W", code: "KeyW", w: "6%" },
+              { label: "E", code: "KeyE", w: "6%" },
+              { label: "R", code: "KeyR", w: "6%" },
+              { label: "T", code: "KeyT", w: "6%" },
+              { label: "Y", code: "KeyY", w: "6%" },
+              { label: "U", code: "KeyU", w: "6%" },
+              { label: "I", code: "KeyI", w: "6%" },
+              { label: "O", code: "KeyO", w: "6%" },
+              { label: "P", code: "KeyP", w: "6%" },
+              { label: "[", sub: "{", code: "BracketLeft", w: "5%" },
+              { label: "]", sub: "}", code: "BracketRight", w: "5%" },
+              { label: "\\", sub: "|", code: "Backslash", w: "6%" },
+            ],
+            [
+              { label: "CAPS", code: "CapsLock", w: "9%", type: "func" },
+              { label: "A", code: "KeyA", w: "6%" },
+              { label: "S", code: "KeyS", w: "6%" },
+              { label: "D", code: "KeyD", w: "6%" },
+              { label: "F", code: "KeyF", w: "6%" },
+              { label: "G", code: "KeyG", w: "6%" },
+              { label: "H", code: "KeyH", w: "6%" },
+              { label: "J", code: "KeyJ", w: "6%" },
+              { label: "K", code: "KeyK", w: "6%" },
+              { label: "L", code: "KeyL", w: "6%" },
+              { label: ";", sub: ":", code: "Semicolon", w: "5%" },
+              { label: "'", sub: '"', code: "Quote", w: "5%" },
+              { label: "ENTER", code: "Enter", w: "8%", type: "func" },
+            ],
+            [
+              { label: "SHIFT", code: "ShiftLeft", w: "11%", type: "func" },
+              { label: "Z", code: "KeyZ", w: "6%" },
+              { label: "X", code: "KeyX", w: "6%" },
+              { label: "C", code: "KeyC", w: "6%" },
+              { label: "V", code: "KeyV", w: "6%" },
+              { label: "B", code: "KeyB", w: "6%" },
+              { label: "N", code: "KeyN", w: "6%" },
+              { label: "M", code: "KeyM", w: "6%" },
+              { label: ",", sub: "<", code: "Comma", w: "6%" },
+              { label: ".", sub: ">", code: "Period", w: "6%" },
+              { label: "/", sub: "?", code: "Slash", w: "6%" },
+              { label: "SHIFT", code: "ShiftRight", w: "8%", type: "func" },
+            ],
+            [
+              { label: "CTRL", code: "ControlLeft", w: "8%", type: "func" },
+              { label: "ALT", code: "AltLeft", w: "8%", type: "func" },
+              { label: "", code: "Space", w: "50%" },
+              { label: "ALT", code: "AltRight", w: "8%", type: "func" },
+              { label: "WIN", code: "MetaLeft", w: "8%", type: "func" },
+            ],
+          ];
+
+          // 指法映射
+          const fingerMapping = {
+            Backquote: "left-pinky",
+            Digit1: "left-pinky",
+            KeyQ: "left-pinky",
+            KeyA: "left-pinky",
+            KeyZ: "left-pinky",
+            Digit2: "left-ring",
+            KeyW: "left-ring",
+            KeyS: "left-ring",
+            KeyX: "left-ring",
+            Digit3: "left-middle",
+            KeyE: "left-middle",
+            KeyD: "left-middle",
+            KeyC: "left-middle",
+            Digit4: "left-index",
+            Digit5: "left-index",
+            KeyR: "left-index",
+            KeyT: "left-index",
+            KeyF: "left-index",
+            KeyG: "left-index",
+            KeyV: "left-index",
+            KeyB: "left-index",
+            Digit6: "right-index",
+            Digit7: "right-index",
+            KeyY: "right-index",
+            KeyU: "right-index",
+            KeyH: "right-index",
+            KeyJ: "right-index",
+            KeyN: "right-index",
+            KeyM: "right-index",
+            Digit8: "right-middle",
+            KeyI: "right-middle",
+            KeyK: "right-middle",
+            Comma: "right-middle",
+            Digit9: "right-ring",
+            KeyO: "right-ring",
+            KeyL: "right-ring",
+            Period: "right-ring",
+            Digit0: "right-pinky",
+            Minus: "right-pinky",
+            Equal: "right-pinky",
+            KeyP: "right-pinky",
+            BracketLeft: "right-pinky",
+            BracketRight: "right-pinky",
+            Backslash: "right-pinky",
+            Semicolon: "right-pinky",
+            Quote: "right-pinky",
+            Slash: "right-pinky",
+            Space: "thumb",
+          };
+
+          const getFingerClass = (key) => {
+            if (key.type === "func") return "";
+            const finger = fingerMapping[key.code];
+            return finger ? `finger-${finger}` : "";
+          };
+
+          // 初始化
+          onMounted(() => {
+            updateScale();
+            initKeyboardSounds();
+            window.addEventListener("resize", updateScale);
+
+            const handleKeyDown = (e) => {
+              if (showAuth.value) return; // 登录弹窗时不抢焦点
+              activeKeys.value.add(e.code);
+              if (!e.repeat) playKeySound();
+              if (!showCustomEditor.value && inputRef.value) {
+                inputRef.value.focus();
+              }
+              if (e.code === "Tab") e.preventDefault();
+            };
+
+            const handleKeyUp = (e) => activeKeys.value.delete(e.code);
+
+            window.addEventListener("keydown", handleKeyDown);
+            window.addEventListener("keyup", handleKeyUp);
+
+            changeTheme("blue");
+            // 保留初始纯色背景，用户可自行选择背景
+            bgmAudio.volume = bgmVolume.value;
+
+            // 预加载默认BGM
+            bgmAudio.src = defaultBgmUrl;
+            bgmAudio.load().catch((e) => {
+              console.warn("默认BGM预加载失败:", e);
+              // 如果默认BGM不存在，可以在这里添加备用逻辑
+            });
+
+            showAuth.value = true;
+          });
+
+          // 计时与历史
+          const timeText = ref("00:00");
+          const wpm = ref(0);
+          const cpm = ref(0);
+          const cps = ref(0);
+          const completedChars = ref(0);
+          const totalTyped = computed(
+            () =>
+              completedChars.value +
+              (lang.value === "zh" ? 0 : userInput.value.length)
+          );
+          const timerStart = ref(null);
+          let timerInterval = null;
+          const paused = ref(false);
+          const historyStore = ref({}); // { username: [...] }
+          const history = ref([]);
+          const showHistory = ref(false);
+          let elapsedBeforePause = 0;
+
+          const refreshMetrics = () => {
+            if (!timerStart.value) return;
+            const elapsedMs = Date.now() - timerStart.value;
+            const elapsedSec = Math.max(0.1, elapsedMs / 1000);
+            const elapsedMin = Math.max(0.0001, elapsedMs / 60000);
+            timeText.value = new Date(Math.floor(elapsedSec) * 1000)
+              .toISOString()
+              .substr(14, 5);
+            wpm.value = Math.round(totalTyped.value / 5 / elapsedMin);
+            cpm.value = Math.round(totalTyped.value / elapsedMin);
+            cps.value = Math.round((totalTyped.value / elapsedSec) * 10) / 10;
+          };
+
+          const getUserKey = () => {
+            const user = (currentUser.value || "").trim();
+            return user ? user : null;
+          };
+
+          const loadHistory = () => {
+            try {
+              const raw = localStorage.getItem("typer_history");
+              historyStore.value = raw ? JSON.parse(raw) || {} : {};
+            } catch (e) {
+              historyStore.value = {};
+              console.warn(e);
+            }
+            const key = getUserKey();
+            history.value = key ? historyStore.value[key] || [] : [];
+          };
+
+          const saveHistory = () => {
+            const key = getUserKey();
+            if (!key) return; // 未登录不保存
+            historyStore.value[key] = history.value || [];
+            try {
+              localStorage.setItem(
+                "typer_history",
+                JSON.stringify(historyStore.value || {})
+              );
+            } catch (e) {
+              console.warn(e);
+            }
+          };
+
+          const clearHistory = () => {
+            const key = getUserKey();
+            if (!key) return;
+            history.value = [];
+            historyStore.value[key] = [];
+            saveHistory();
+          };
+
+          const startTimer = () => {
+            if (timerStart.value) return;
+            timerStart.value = Date.now() - elapsedBeforePause;
+            paused.value = false;
+            if (timerInterval) clearInterval(timerInterval);
+            refreshMetrics();
+            timerInterval = setInterval(refreshMetrics, 200);
+          };
+
+          const pauseTimer = () => {
+            if (!timerStart.value || paused.value) return;
+            clearInterval(timerInterval);
+            timerInterval = null;
+            elapsedBeforePause = Date.now() - timerStart.value;
+            paused.value = true;
+          };
+
+          const resumeTimer = () => {
+            if (!timerStart.value)
+              timerStart.value = Date.now() - elapsedBeforePause;
+            paused.value = false;
+            if (timerInterval) clearInterval(timerInterval);
+            refreshMetrics();
+            timerInterval = setInterval(refreshMetrics, 200);
+          };
+
+          const togglePause = () => {
+            if (paused.value) resumeTimer();
+            else pauseTimer();
+          };
+
+          const toggleHistory = () => {
+            if (!getUserKey()) {
+              alert("请先登录后查看历史成绩");
+              showAuth.value = true;
+              return;
+            }
+            showHistory.value = !showHistory.value;
+          };
+
+          watch(
+            () => showAuth.value,
+            (val) => {
+              if (val && inputRef.value) {
+                inputRef.value.blur();
+              }
+            }
+          );
+
+          watch(
+            () => currentUser.value,
+            () => {
+              loadHistory();
+              showHistory.value = false;
+            }
+          );
+
+          const triggerKeyboardUpload = () => {
+            document.getElementById("keyboardWallpaperInput").click();
+          };
+
+          const onKeyboardWallpaper = (e) => {
+            const f = e.target.files[0];
+            if (!f) return;
+
+            if (bgObjectUrl.value) {
+              try {
+                URL.revokeObjectURL(bgObjectUrl.value);
+              } catch (e) {
+                console.warn("释放blob URL失败:", e);
+              }
+            }
+
+            const url = URL.createObjectURL(f);
+            bgObjectUrl.value = url;
+
+            // 清除所有背景样式
+            document.body.style.background = "";
+            document.body.style.backgroundImage = "";
+            document.body.style.backgroundSize = "";
+            document.body.style.backgroundPosition = "";
+
+            // 设置自定义背景
+            document.body.style.backgroundImage = `url(${url})`;
+            document.body.style.backgroundSize = "cover";
+            document.body.style.backgroundPosition = "center";
+            document.body.style.backgroundAttachment = "fixed";
+
+            currentBackgroundName.value = "custom";
+            showBgCancel.value = true;
+            e.target.value = "";
+          };
+
+          const recordResult = () => {
+            const key = getUserKey();
+            if (!key) return; // 未登录不记录
+            const durationMs = timerStart.value
+              ? Date.now() - timerStart.value
+              : 0;
+            const isEnglish = lang.value === "en";
+            const entry = {
+              metric: isEnglish ? wpm.value : cpm.value,
+              metricLabel: isEnglish ? "WPM" : "字/分",
+              lang: lang.value,
+              duration: durationMs,
+              chars: totalTyped.value,
+              time: Date.now(),
+              text: currentLineText.value,
+              user: currentUser.value || "访客",
+            };
+            history.value.push(entry);
+            saveHistory();
+          };
+
+          const finishTypingSession = () => {
+            recordResult();
+            alert("您已完成本次打字，可在历史成绩中查看本次成绩");
+            if (timerInterval) {
+              clearInterval(timerInterval);
+              timerInterval = null;
+            }
+            timerStart.value = null;
+            elapsedBeforePause = 0;
+            paused.value = false;
+            timeText.value = "00:00";
+            wpm.value = 0;
+            cpm.value = 0;
+            cps.value = 0;
+            completedChars.value = 0;
+            userInput.value = "";
+            currentLineIndex.value = 0;
+            currentCharIndex.value = 0;
+          };
+
+          const endSession = () => {
+            finishTypingSession();
+          };
+
+          // 加载历史记录
+          loadHistory();
+          loadUsers();
+
+          // 清理
+          onUnmounted(() => {
+            window.removeEventListener("resize", updateScale);
+
+            if (bgObjectUrl.value) {
+              try {
+                URL.revokeObjectURL(bgObjectUrl.value);
+              } catch (e) {
+                console.warn("释放blob URL失败:", e);
+              }
+            }
+            if (bgmObjectUrl.value) {
+              try {
+                URL.revokeObjectURL(bgmObjectUrl.value);
+              } catch (e) {
+                console.warn("释放BGM URL失败:", e);
+              }
+            }
+            bgmAudio.pause();
+            bgmAudio.src = "";
+          });
+          return {
+            scaleRatio,
+            themes,
+            currentThemeName,
+            currentTheme,
+            lang,
+            library,
+            currentTitle,
+            currentLineIndex,
+            currentCharIndex,
+            userInput,
+            activeKeys,
+            inputRef,
+            keyboardLayout,
+            poetryLines,
+            textGridClass,
+            currentLineText,
+            lineHeightPx,
+            progress,
+            changeTheme,
+            changeBackground,
+            setLang,
+            selectPoetry,
+            selectCustomText,
+            handleInput,
+            getCharClass,
+            getFingerClass,
+            timeText,
+            wpm,
+            cpm,
+            cps,
+            paused,
+            togglePause,
+            showBgCancel,
+            cancelBackground,
+            showHistory,
+            history,
+            clearHistory,
+            backgrounds,
+            currentBackgroundName,
+            onKeyboardWallpaper,
+            soundEnabled,
+            toggleSound,
+            bgmPlaying,
+            bgmVolume,
+            bgmObjectUrl,
+            toggleBgm,
+            setBgmVolume,
+            triggerBgmUpload,
+            onBgmUpload,
+            currentUser,
+            showAuth,
+            authMode,
+            authForm,
+            openAuth,
+            submitAuth,
+            logout,
+            startTimer,
+            pauseTimer,
+            resumeTimer,
+            recordResult,
+            loadHistory,
+            saveHistory,
+            toggleHistory,
+            triggerKeyboardUpload,
+            endSession,
+            customText,
+            customTextArray,
+            customLines,
+            showCustomEditor,
+            toggleCustomEditor,
+            applyCustomText,
+            getCustomTextTitle,
+          };
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>
